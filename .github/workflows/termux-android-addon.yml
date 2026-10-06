@@ -62,7 +62,7 @@ jobs:
           ANDROID_ABI: arm64-v8a
           ANDROID_PLATFORM: android-24
         run: |
-          set -euo pipefail
+          set -uo pipefail
           TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
           API=24
           export PATH="$TOOLCHAIN/bin:$PATH"
@@ -74,21 +74,28 @@ jobs:
           export PCRE2_SYS_STATIC=1
           export RUSTC_BOOTSTRAP=1
           export RUSTFLAGS="-C target-cpu=generic"
+          echo "== toolchain =="
+          rustc -vV | sed -n '1,3p'; cargo -V; cmake --version | head -1; ninja --version || true; node -v
+          echo "== ndk =="; ls "$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" && head -20 "$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" | grep -i -m3 abi || true
           mkdir -p android-build
-          cd crates/pi-natives
-          # same flags the on-device build used (`local` profile mirrors the known-good addon)
-          npx --yes @napi-rs/cli@3.7.2 build \
-            --manifest-path Cargo.toml \
-            --package-json-path ../../packages/natives/package.json \
-            --target aarch64-linux-android \
-            --platform --no-js --dts index.d.ts \
-            -o ../../android-build --profile local
-          ls -la ../../android-build
+          set +e
+          ( cd crates/pi-natives && npx --yes @napi-rs/cli@3.7.2 build \
+              --manifest-path Cargo.toml \
+              --package-json-path ../../packages/natives/package.json \
+              --target aarch64-linux-android \
+              --platform --no-js --dts index.d.ts \
+              -o ../../android-build --profile local ) 2>&1 | tee /tmp/build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          tail -c 60000 /tmp/build.log > ci-debug.log
+          if [ "$rc" -ne 0 ]; then echo "::error::napi build failed rc=$rc (see ci-debug.log)"; exit "$rc"; fi
+          ls -la android-build
 
       - name: Strip + stamp + verify
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
+          exec > >(tee -a /tmp/build.log) 2>&1
           set -euo pipefail
           ADDON=android-build/pi_natives.android-arm64.node
           "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" --strip-unneeded "$ADDON"
@@ -117,3 +124,17 @@ jobs:
           files: android-build/pi_natives.android-arm64.node
           overwrite_files: true
           prerelease: true
+
+      # On failure, commit the tail of the build log to the branch so it can be
+      # read without API access (root-level file: never re-triggers this workflow).
+      - name: Publish failure log
+        if: failure()
+        run: |
+          set -euo pipefail
+          [ -f /tmp/build.log ] || { echo "no build log"; exit 0; }
+          tail -c 60000 /tmp/build.log > ci-debug.log
+          git config user.name "termux-ci-bot"
+          git config user.email "termux-ci-bot@users.noreply.github.com"
+          git add -f ci-debug.log
+          git commit -m "ci: capture failure log [skip ci]"
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
