@@ -39,7 +39,9 @@ curl -fL --retry 3 --connect-timeout 15 -o "$TMP/addon.node" "$ADDON_URL"
 
 echo "== 2/5 bun 安装 CLI@$V 到 \$PREFIX =="
 rm -f "$PREFIX/bin/omp"
-BUN_INSTALL="$PREFIX" bun add -g "@oh-my-pi/pi-coding-agent@$V"
+# --backend=copyfile: without it bun links package files to its cache and the
+# CLI resolves @oh-my-pi/pi-natives from a *different* (unpatched) cache copy.
+BUN_INSTALL="$PREFIX" bun add -g --backend=copyfile "@oh-my-pi/pi-coding-agent@$V"
 
 echo "== 3/5 注入 addon + 平台补丁 =="
 [ -d "$NATIVES" ] || { echo "!! 找不到 $NATIVES（bun 安装布局异常）"; exit 1; }
@@ -78,4 +80,4 @@ echo "== 5/5 清理旧安装 =="
 OLD="$PREFIX/lib/node_modules/@oh-my-pi/pi-coding-agent"
 if [ -d "$OLD" ]; then rm -rf "$OLD" && echo "removed old npm-style install: $OLD"; fi
 
-echo "✅ omp $V 已就绪：$(command -v omp) → $(readlink -f "$PREFIX/bin/omp")"
+echo "✅ omp $V 已就绪：$PREFIX/bin/omp → $(readlink -f "$PREFIX/bin/omp")"
