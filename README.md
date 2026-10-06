@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <b>This fork adds a Termux / Android arm64 port</b> — branch <code>android-18.6.1</code> ·
+  <b>This fork adds a Termux / Android arm64 port</b> — branch <code>android-18.6.3</code> ·
   <a href="scripts/termux/README.md">scripts/termux/README.md</a>
 </p>
 
@@ -48,21 +48,21 @@ needs a Rust toolchain.
 ```sh
 # install or update (Termux; no root, no compilers):
 curl -fsSL -H "Accept: application/vnd.github.raw" \
-  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.6.1" | bash
+  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.6.3" | bash
 
 # pin a version (default: newest android-addon-* release)
-#   ... | bash -s -- 18.6.1
+#   ... | bash -s -- 18.6.3
 
 # behind a proxy / where raw.githubusercontent.com is reachable, the canonical form also works:
-curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.1/scripts/termux/update-omp.sh | bash
+curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.3/scripts/termux/update-omp.sh | bash
 ```
 
 How it works:
 
-- **Source port** — `loader-state.js` registers `android-arm64`, `desktop-adapter.js` guards the absent `NativeDesktopSession`, and `crates/pi-shell` / `crates/pi-builtins` adapt process, PTY, `ps` and `kill` for Android.
+- **Source port** — `loader-state.js` registers `android-arm64`, and `crates/pi-shell` / `crates/pi-builtins` adapt process, PTY, `ps` and `kill` for Android.
 - **Build** — `.github/workflows/termux-android-addon.yml` cross-compiles `pi_natives.android-arm64.node` (NDK r27c, `aarch64-linux-android`, the repo's pinned nightly toolchain) and stamps it with `packages/natives/package.json#version`.
 - **Release** — every build publishes `android-addon-<version>` with the addon attached.
-- **Install** — the updater installs the matching CLI with `bun add -g --backend=copyfile` into `$PREFIX`, injects the addon, patches `loader-state.js` + `desktop-adapter.js`, verifies `omp --version` and native loading, then removes a legacy npm-style install. `--backend=copyfile` matters: bun's default cache linking makes the CLI resolve an *unpatched* `@oh-my-pi/pi-natives` copy.
+- **Install** — the updater installs the matching CLI with `bun add -g --backend=copyfile` into `$PREFIX`, injects the addon, patches `loader-state.js`, verifies `omp --version` and native loading, then removes a legacy npm-style install. `--backend=copyfile` matters: bun's default cache linking makes the CLI resolve an *unpatched* `@oh-my-pi/pi-natives` copy.
 
 Notes:
 
