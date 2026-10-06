@@ -1,7 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import * as fs from "node:fs/promises";
-import * as os from "node:os";
-import * as path from "node:path";
 import { adaptDesktopSession } from "../native/desktop-adapter.js";
 
 describe("desktop native ABI requirements", () => {
