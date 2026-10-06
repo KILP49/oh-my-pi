@@ -76,6 +76,6 @@ Then stage and install it:
 
 ## Verified on device (Android 16 / arm64, bun 1.4.2)
 
-- addon built by CI release `android-addon-18.6.1` loads with `native exports: 126`,
-  `buildVersion: 18.6.1` (175,117,920 bytes after `llvm-strip`)
-- one-line install end-to-end finishes in ~45 s → `omp/18.6.1`
+- addon built by CI release `android-addon-18.6.3` loads with `native exports: 129`,
+  `buildVersion: 18.6.3` (175,293,784 bytes after `llvm-strip`)
+- one-line install end-to-end finishes in ~35 s → `omp/18.6.3`
