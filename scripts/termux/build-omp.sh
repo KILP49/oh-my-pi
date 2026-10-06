@@ -9,7 +9,6 @@ OUT="$S/packages/natives/native/android-build"
 
 echo "== preflight =="
 cd "$S"
-echo "branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "natives version: $(node -p "require('$S/packages/natives/package.json').version")"
 echo "agent version:   $(node -p "require('$S/packages/coding-agent/package.json').version")"
 
