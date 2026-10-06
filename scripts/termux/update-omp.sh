@@ -1,9 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # One-line Termux updater for the android-arm64 omp port.
 #
-#   curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.1/scripts/termux/update-omp.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.3/scripts/termux/update-omp.sh | bash
 #   # or pin a version:
-#   curl -fsSL .../update-omp.sh | bash -s -- 18.6.1
+#   curl -fsSL .../update-omp.sh | bash -s -- 18.6.3
 #
 # Installs the CLI from npm (via bun, no root), swaps in the CI-built
 # android-arm64 addon from the fork's per-version release, applies the
@@ -24,7 +24,7 @@ import json, re, sys
 pat = re.compile(r"^android-addon-(\d+(?:\.\d+)*)$")
 rels = [m for m in (pat.match(str(r.get("tag_name", ""))) for r in json.load(sys.stdin)) if m]
 print(max(rels, key=lambda m: [int(x) for x in m.group(1).split(".")]).group(1) if rels else "")')"
-  [ -n "$V" ] || { echo "!! 未找到 android-addon-* release（CI 尚未产出？可显式传版本，如：bash -s -- 18.6.1）"; exit 2; }
+  [ -n "$V" ] || { echo "!! 未找到 android-addon-* release（CI 尚未产出？可显式传版本，如：bash -s -- 18.6.3）"; exit 2; }
   echo "latest: $V"
 fi
 
@@ -43,13 +43,13 @@ rm -f "$PREFIX/bin/omp"
 # CLI resolves @oh-my-pi/pi-natives from a *different* (unpatched) cache copy.
 BUN_INSTALL="$PREFIX" bun add -g --backend=copyfile "@oh-my-pi/pi-coding-agent@$V"
 
-echo "== 3/5 注入 addon + 平台补丁 =="
+echo "== 3/5 注入 addon + loader 补丁 =="
 [ -d "$NATIVES" ] || { echo "!! 找不到 $NATIVES（bun 安装布局异常）"; exit 1; }
 install -m 755 "$TMP/addon.node" "$NATIVES/pi_natives.android-arm64.node"
-python3 - "$NATIVES/loader-state.js" "$NATIVES/desktop-adapter.js" <<'PY'
+python3 - "$NATIVES/loader-state.js" <<'PY'
 import sys
 
-loader, adapter = sys.argv[1], sys.argv[2]
+loader = sys.argv[1]
 
 src = open(loader).read()
 if '"android-arm64"' not in src:
@@ -59,16 +59,6 @@ if '"android-arm64"' not in src:
     print("loader patched")
 else:
     print("loader already patched")
-
-src = open(adapter).read()
-guard = '\tif (typeof NativeDesktopSession !== "function") return NativeDesktopSession;'
-if guard not in src:
-    marker = "export function adaptDesktopSession(NativeDesktopSession) {"
-    assert marker in src, "adaptDesktopSession not found in desktop-adapter.js"
-    open(adapter, "w").write(src.replace(marker, marker + "\n" + guard, 1))
-    print("adapter patched")
-else:
-    print("adapter already patched")
 PY
 
 echo "== 4/5 验证 =="

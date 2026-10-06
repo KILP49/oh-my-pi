@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Build pi_natives android-arm64 addon from branch android-18.6.1 (v18.6.1 + fork android commits).
+# Build the android-arm64 pi_natives addon from the port checkout below.
 set -euo pipefail
 export NO_COLOR=1 CARGO_TERM_COLOR=never
 

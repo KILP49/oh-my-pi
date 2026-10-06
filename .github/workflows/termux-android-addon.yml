@@ -1,7 +1,7 @@
 # Cross-builds the Termux / android-arm64 native addon and attaches it to a
 # per-version release, so the phone can update without a local Rust toolchain:
 #
-#   curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.1/scripts/termux/update-omp.sh | bash -s -- <version>
+#   curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.3/scripts/termux/update-omp.sh | bash -s -- <version>
 #
 name: termux-android-addon
 
