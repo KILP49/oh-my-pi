@@ -22,6 +22,11 @@
   Built by <a href="https://stencil.so">Stencil Labs</a> · Fork of <a href="https://github.com/badlogic/pi-mono">Pi</a> by <a href="https://github.com/mariozechner">@mariozechner</a>
 </p>
 
+<p align="center">
+  <b>This fork adds a Termux / Android arm64 port</b> — branch <code>android-18.6.1</code> ·
+  <a href="scripts/termux/README.md">scripts/termux/README.md</a>
+</p>
+
 The most capable agent surface that ships. Continuously tuned by real-world use — complete out of the box, open all the way down.
 
 **60+** providers · **31** built-in tools · **14** lsp ops · **28** dap ops · **~80k** lines of Rust core.
@@ -31,6 +36,39 @@ The most capable agent surface that ships. Continuously tuned by real-world use 
 > required a vouch before accepting PRs; that requirement is lifted for now
 > while we evaluate how open contributions go. Depending on the results, the
 > vouch system may return.
+
+## Termux / Android arm64 (this fork)
+
+Upstream ships no `android-arm64` native addon (`SUPPORTED_PLATFORMS` has no Android
+entry), so `omp` aborts on Termux with `Unsupported platform: android-arm64`. This
+branch carries the source port plus a GitHub Actions job that cross-builds the addon
+with the Android NDK and publishes it as a per-version release — the phone never
+needs a Rust toolchain.
+
+```sh
+# install or update (Termux; no root, no compilers):
+curl -fsSL -H "Accept: application/vnd.github.raw" \
+  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.6.1" | bash
+
+# pin a version (default: newest android-addon-* release)
+#   ... | bash -s -- 18.6.1
+
+# behind a proxy / where raw.githubusercontent.com is reachable, the canonical form also works:
+curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.1/scripts/termux/update-omp.sh | bash
+```
+
+How it works:
+
+- **Source port** — `loader-state.js` registers `android-arm64`, `desktop-adapter.js` guards the absent `NativeDesktopSession`, and `crates/pi-shell` / `crates/pi-builtins` adapt process, PTY, `ps` and `kill` for Android.
+- **Build** — `.github/workflows/termux-android-addon.yml` cross-compiles `pi_natives.android-arm64.node` (NDK r27c, `aarch64-linux-android`, the repo's pinned nightly toolchain) and stamps it with `packages/natives/package.json#version`.
+- **Release** — every build publishes `android-addon-<version>` with the addon attached.
+- **Install** — the updater installs the matching CLI with `bun add -g --backend=copyfile` into `$PREFIX`, injects the addon, patches `loader-state.js` + `desktop-adapter.js`, verifies `omp --version` and native loading, then removes a legacy npm-style install. `--backend=copyfile` matters: bun's default cache linking makes the CLI resolve an *unpatched* `@oh-my-pi/pi-natives` copy.
+
+Notes:
+
+- The addon carries a version stamp (`PI_NATIVES_VERSION_STAMP:<version>`) that must match the installed `@oh-my-pi/pi-natives` version — a new omp release needs a matching addon build.
+- **Do not use the upstream installer or `omp update` on Termux**: they restore the stock `pi-natives` package and native loading breaks.
+- Local fallback builds and the full patch-set list: [`scripts/termux/README.md`](scripts/termux/README.md).
 
 ## Install
 
