@@ -79,7 +79,7 @@ jobs:
           echo "== ndk =="; ls "$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" && head -20 "$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" | grep -i -m3 abi || true
           mkdir -p android-build
           set +e
-          ( cd crates/pi-natives && npx --yes @napi-rs/cli@3.7.2 build \
+          ( cd crates/pi-natives && npx --yes --package @napi-rs/cli@3.7.2 napi build \
               --manifest-path Cargo.toml \
               --package-json-path ../../packages/natives/package.json \
               --target aarch64-linux-android \
