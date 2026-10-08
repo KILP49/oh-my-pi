@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <b>This fork adds a Termux / Android arm64 port</b> — branch <code>android-18.6.3</code> ·
+  <b>This fork adds a Termux / Android arm64 port</b> — branch <code>android-18.8.3</code> ·
   <a href="scripts/termux/README.md">scripts/termux/README.md</a>
 </p>
 
@@ -48,13 +48,13 @@ needs a Rust toolchain.
 ```sh
 # install or update (Termux; no root, no compilers):
 curl -fsSL -H "Accept: application/vnd.github.raw" \
-  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.6.3" | bash
+  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.8.3" | bash
 
 # pin a version (default: newest android-addon-* release)
-#   ... | bash -s -- 18.6.3
+#   ... | bash -s -- 18.8.3
 
 # behind a proxy / where raw.githubusercontent.com is reachable, the canonical form also works:
-curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.3/scripts/termux/update-omp.sh | bash
+curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.8.3/scripts/termux/update-omp.sh | bash
 ```
 
 How it works:

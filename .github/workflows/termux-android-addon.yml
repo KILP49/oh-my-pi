@@ -27,12 +27,12 @@ jobs:
         with:
           bun-version: latest
 
-      # rust-toolchain.toml pins nightly-2026-08-12 (without the android target);
+      # rust-toolchain.toml pins nightly-2026-10-06 (without the android target);
       # install that exact toolchain plus aarch64-linux-android, else cargo runs
       # without std for the target.
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2026-08-12
+          toolchain: nightly-2026-10-06
           targets: aarch64-linux-android
 
       - uses: nttld/setup-ndk@v1
