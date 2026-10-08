@@ -1,9 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # One-line Termux updater for the android-arm64 omp port.
 #
-#   curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.6.3/scripts/termux/update-omp.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.8.3/scripts/termux/update-omp.sh | bash
 #   # or pin a version:
-#   curl -fsSL .../update-omp.sh | bash -s -- 18.6.3
+#   curl -fsSL .../update-omp.sh | bash -s -- 18.8.3
 #
 # Installs the CLI from npm (via bun, no root), swaps in the CI-built
 # android-arm64 addon from the fork's per-version release, applies the
