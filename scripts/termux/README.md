@@ -1,4 +1,4 @@
-# Termux / Android arm64 port (omp, branch `android-18.8.3`)
+# Termux / Android arm64 port (omp, branch `android-18.8.9`)
 
 Upstream npm packages ship no `android-arm64` native addon, so `omp` aborts on Termux
 with `Unsupported platform: android-arm64`. This branch carries the source port plus
@@ -16,13 +16,13 @@ the tooling that builds, ships and installs it.
 ```sh
 # raw.githubusercontent.com unreachable (e.g. mainland China without a proxy) -> use the api.github.com form
 curl -fsSL -H "Accept: application/vnd.github.raw" \
-  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.8.3" | bash
+  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.8.9" | bash
 
 # canonical form
-curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.8.3/scripts/termux/update-omp.sh | bash
+curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.8.9/scripts/termux/update-omp.sh | bash
 
 # pin a version (default: newest android-addon-* release)
-#   ... | bash -s -- 18.8.3
+#   ... | bash -s -- 18.8.9
 ```
 
 Requires `bun`, `curl` and `python3` in Termux (`pkg install bun curl python`). No root,
