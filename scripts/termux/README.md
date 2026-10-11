@@ -76,7 +76,7 @@ Then stage and install it:
 
 ## Verified on device (Android 16 / arm64, bun 1.4.2)
 
-- addon built by CI release `android-addon-18.8.3` loads with `native exports: 129`,
-  `buildVersion: 18.8.3` (175,198,880 bytes after `llvm-strip`)
-- one-line install end-to-end finishes in ~1 min → `omp/18.8.3`; `omp -p` bash-tool
+- addon built by CI release `android-addon-18.8.9` loads with `native exports: 131`,
+  `buildVersion: 18.8.9` (96,254,624 bytes after `llvm-strip`)
+- one-line install end-to-end finishes in ~12 s → `omp/18.8.9`; `omp -p` bash-tool
   smoke run returns the expected command output
