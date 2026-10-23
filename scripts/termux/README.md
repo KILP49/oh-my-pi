@@ -1,4 +1,4 @@
-# Termux / Android arm64 port (omp, branch `android-18.8.9`)
+# Termux / Android arm64 port (omp, branch `android-18.12.6`)
 
 Upstream npm packages ship no `android-arm64` native addon, so `omp` aborts on Termux
 with `Unsupported platform: android-arm64`. This branch carries the source port plus
@@ -16,13 +16,13 @@ the tooling that builds, ships and installs it.
 ```sh
 # raw.githubusercontent.com unreachable (e.g. mainland China without a proxy) -> use the api.github.com form
 curl -fsSL -H "Accept: application/vnd.github.raw" \
-  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.8.9" | bash
+  "https://api.github.com/repos/KILP49/oh-my-pi/contents/scripts/termux/update-omp.sh?ref=android-18.12.6" | bash
 
 # canonical form
-curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.8.9/scripts/termux/update-omp.sh | bash
+curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.12.6/scripts/termux/update-omp.sh | bash
 
 # pin a version (default: newest android-addon-* release)
-#   ... | bash -s -- 18.8.9
+#   ... | bash -s -- 18.12.6
 ```
 
 Requires `bun`, `curl` and `python3` in Termux (`pkg install bun curl python`). No root,
@@ -74,9 +74,10 @@ Then stage and install it:
 - Never run the upstream installer or `omp update` on Termux: both restore the stock
   `pi-natives` package and native loading breaks.
 
-## Verified on device (Android 16 / arm64, bun 1.4.2)
+## Build status
 
-- addon built by CI release `android-addon-18.8.9` loads with `native exports: 131`,
-  `buildVersion: 18.8.9` (96,254,624 bytes after `llvm-strip`)
-- one-line install end-to-end finishes in ~12 s → `omp/18.8.9`; `omp -p` bash-tool
-  smoke run returns the expected command output
+- 2026-10-23 — CI release `android-addon-18.12.6`,
+  `PI_NATIVES_VERSION_STAMP:18.12.6`, 98,806,304 bytes after `llvm-strip`
+  (run `39945834527`, job success)
+- On-device verification for 18.12.6 is pending. The last device-verified build was
+  18.8.9: Android 16 / arm64, bun 1.4.2, 131 native exports, one-line install ~12 s.
