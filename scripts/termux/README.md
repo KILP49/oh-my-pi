@@ -88,8 +88,10 @@ Then stage and install it:
 
 ## Termux TUI flicker
 
-The TUI wraps every render in DEC 2026 synchronized output. Termux 0.118.x does not
-handle it reliably, so the screen can flicker/tear while output streams:
+Termux 0.118.x redraws the whole viewport when the soft keyboard changes the terminal
+height, which shows up as a flash. Some terminals also mishandle DEC 2026 synchronized
+output. omp 18.12.6 probes for DEC 2026 and skips the markers when the terminal does
+not answer, so the env var below may be a no-op on Termux; try it first anyway:
 
 ```sh
 PI_NO_SYNC_OUTPUT=1 omp
