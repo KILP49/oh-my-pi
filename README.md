@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/KILP49/oh-my-pi/releases"><img src="https://img.shields.io/github/v/release/KILP49/oh-my-pi?label=android-addon&colorA=222222&colorB=3FB950" alt="android-addon release"></a>
+  <a href="https://github.com/KILP49/oh-my-pi/releases"><img src="https://img.shields.io/github/v/release/KILP49/oh-my-pi?include_prereleases&label=android-addon&colorA=222222&colorB=3FB950" alt="android-addon release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
 </p>
 
