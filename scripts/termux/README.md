@@ -52,6 +52,23 @@ What `update-omp.sh` does:
 linked to bun's cache and the CLI ends up resolving an *unpatched*
 `@oh-my-pi/pi-natives` copy from `~/.bun/install/cache/...`.
 
+## Tuning
+
+`tune-termux.sh` applies the settings that fit Termux:
+
+```sh
+bash scripts/termux/tune-termux.sh
+```
+
+It disables smooth streaming, switches symbols/status line to ASCII, and turns the
+browser tool off. If output still feels janky while a model streams quickly, coalesce
+repaints (patches the installed `dist/cli.js`, keeps a backup):
+
+```sh
+bash scripts/termux/patch-render.sh 40    # ms between paints; 60–80 for slower devices
+bash scripts/termux/patch-render.sh restore
+```
+
 ## CI
 
 `.github/workflows/termux-android-addon.yml`
