@@ -81,4 +81,5 @@ OLD="$PREFIX/lib/node_modules/@oh-my-pi/pi-coding-agent"
 if [ -d "$OLD" ]; then rm -rf "$OLD" && echo "removed old npm-style install: $OLD"; fi
 
 echo "✅ omp $V ready: $PREFIX/bin/omp -> $(readlink -f "$PREFIX/bin/omp")"
-echo "   If the TUI flickers in Termux, run with PI_NO_SYNC_OUTPUT=1 (DEC 2026 workaround)."
+echo "   Termux streaming looks jumpy? omp config set display.smoothStreaming false"
+echo "   Still tearing? PI_NO_SYNC_OUTPUT=1 omp"
