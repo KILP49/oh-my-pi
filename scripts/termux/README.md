@@ -66,7 +66,10 @@ disables the browser tool. If output still feels janky while a model streams qui
 repaints (patches the installed `dist/cli.js`, keeps a backup):
 
 ```sh
-bash scripts/termux/patch-render.sh 40    # ms between paints; 60–80 for slower devices
+bash scripts/termux/patch-render.sh 40 60 --no-italic
+#   arg 1: ms between paints (default 40)
+#   arg 2: streaming reveal frame (default 60; stock 33.3)
+#   --no-italic: drop SGR italics (Termux synthesises them; they overlap)
 bash scripts/termux/patch-render.sh restore
 ```
 
