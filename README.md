@@ -100,8 +100,8 @@ linked to bun's cache and the CLI resolves an **unpatched**
   the thinking shimmer disabled (it repaints every 70 ms),
   and the browser tool turned off (no Chromium in Termux).
 - If streaming still feels janky, coalesce repaints (patches the installed CLI bundle,
-  keeps a backup): `bash scripts/termux/patch-render.sh 40`; undo with
-  `bash scripts/termux/patch-render.sh restore`.
+  keeps a backup): `bash scripts/termux/patch-render.sh 40 60 --no-italic`
+  (paint ms, reveal ms, drop italics); undo with `bash scripts/termux/patch-render.sh restore`.
 
 ## How the port works
 
