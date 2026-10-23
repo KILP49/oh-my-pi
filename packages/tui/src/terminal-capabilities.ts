@@ -10,17 +10,37 @@ import {
 	renderKittyPlaceholderLines,
 	setKittyGraphics,
 } from "./kitty-graphics";
+import { ensureSixelRasterWidth } from "./sixel";
 import {
 	isInsideTerminalMultiplexer,
+	isTerminalBackgroundQueryTrusted,
 	routeTerminalMultiplexerNotification,
 	terminalMultiplexerForTerm,
 	terminalMultiplexerSessions,
 } from "./terminal-multiplexer";
-import { resolveTmuxClientTerminalName, wrapTmuxPassthroughIfNeeded } from "./tmux";
+import { resolveTmuxClientTerminalNames, tmuxPaneAllowsPassthrough, wrapTmuxPassthroughIfNeeded } from "./tmux";
+import { detectTerminalBackground } from "./theme/theme";
 import type { HangulCompatibilityJamoWidth } from "./utils";
 
 export * from "./terminal-multiplexer";
 export { wrapTmuxPassthrough } from "./tmux";
+
+/** Last valid OSC 11 background, packed as 0xRRGGBB. */
+let terminalBackgroundColor: number | undefined;
+
+/**
+ * Trusted terminal background when reported; otherwise black for detected dark
+ * appearance or white for detected light appearance, using theme auto-detection.
+ */
+export function getTerminalBackgroundColor(): number {
+	if (isTerminalBackgroundQueryTrusted() && terminalBackgroundColor !== undefined) return terminalBackgroundColor;
+	return detectTerminalBackground() === "light" ? 0xffffff : 0x000000;
+}
+
+/** Store an OSC 11 background, or reset to appearance detection (also for tests). */
+export function setTerminalBackgroundColor(color: number | undefined): void {
+	terminalBackgroundColor = color;
+}
 
 export enum ImageProtocol {
 	Kitty = "\x1b_G",
@@ -384,7 +404,11 @@ export function detectStyledUnderlineSupport(terminalId: TerminalId, env: NodeJS
 			// render. Enable only on a confirmed major.minor >= 3.5; an absent or
 			// unparseable version keeps the flat fallback so only proven terminals
 			// get the colon form.
-			const version = parseMajorMinorVersion(env.TERM_PROGRAM_VERSION);
+			//
+			// `LC_TERMINAL_VERSION` carries the same version over SSH, where
+			// `TERM_PROGRAM_VERSION` is stripped, so it is the fallback source.
+			const version =
+				parseMajorMinorVersion(env.TERM_PROGRAM_VERSION) ?? parseMajorMinorVersion(env.LC_TERMINAL_VERSION);
 			return version !== null && (version.major > 3 || (version.major === 3 && version.minor >= 5));
 		}
 		default:
@@ -469,9 +493,10 @@ function getFallbackImageProtocol(
 	if (!isTTY) return null;
 	if (terminalId === "vscode" || terminalId === "alacritty") return null;
 	const term = env.TERM?.toLowerCase() ?? "";
-	if (term.includes("screen") || term.includes("tmux") || term.includes("ghostty")) {
-		return ImageProtocol.Kitty;
-	}
+	// tmux TERM names the pane, not the attached client's graphics support.
+	// Leave unknown clients unselected so the runtime SIXEL probe can run.
+	if (env.TMUX || term.includes("tmux")) return null;
+	if (term.includes("screen") || term.includes("ghostty")) return ImageProtocol.Kitty;
 	return null;
 }
 /**
@@ -538,6 +563,12 @@ export function resolveImageProtocol(
 		imageProtocol !== null &&
 		terminalMultiplexerSessions(env).some(multiplexer => multiplexer.imagesRequireOverride)
 	) {
+		return null;
+	}
+	// Kitty graphics reach a tmux client only through the DCS passthrough
+	// envelope, which tmux drops unless `allow-passthrough` is enabled. A Kitty
+	// client identity alone would otherwise send images into the void.
+	if (imageProtocol === ImageProtocol.Kitty && env.TMUX && !tmuxPaneAllowsPassthrough(env)) {
 		return null;
 	}
 	return imageProtocol;
@@ -646,6 +677,7 @@ export function detectTerminalId(env: NodeJS.ProcessEnv = Bun.env): TerminalId {
 		VSCODE_PID,
 		ALACRITTY_WINDOW_ID,
 		TERM_PROGRAM,
+		LC_TERMINAL,
 		TERM,
 		COLORTERM,
 	} = env;
@@ -660,10 +692,28 @@ export function detectTerminalId(env: NodeJS.ProcessEnv = Bun.env): TerminalId {
 	const programId = fromProgram(TERM_PROGRAM);
 	if (programId) return programId;
 
+	// iTerm2 sets `LC_TERMINAL=iTerm2` (plus `LC_TERMINAL_VERSION`) in the local
+	// session precisely so it survives SSH: openssh/mosh forward `LC_*` to the
+	// remote host, while `ITERM_SESSION_ID` and `TERM_PROGRAM` are stripped. Its
+	// own shell integration says the same: "TERM_PROGRAM is set by the local
+	// terminal but not forwarded over SSH. LC_TERMINAL is set by iTerm2 and may
+	// be forwarded over SSH." Without this branch the remote session falls to
+	// the true-color profile and loses the iTerm2 inline-image protocol, OSC 8
+	// hyperlinks and OSC 9 notifications.
+	//
+	// Gated on the absence of a multiplexer: iTerm2's OSC 1337 encoder is the
+	// only image encoder that does not wrap its payload in a tmux passthrough
+	// envelope, so inside a multiplexer the sequence would be swallowed by the
+	// multiplexer instead of reaching the outer terminal. The multiplexer path
+	// resolves the outer client on its own.
+	if (LC_TERMINAL && caseEq(LC_TERMINAL, "iTerm2") && !isInsideTerminalMultiplexer(env)) return "iterm2";
+
 	// tmux >= 3.2 replaces the pane's identity with `TERM_PROGRAM=tmux`.
-	// Its server still holds the attached client's terminal-type reply.
-	const clientProgramId = fromProgram(resolveTmuxClientTerminalName(env) ?? undefined);
-	if (clientProgramId) return clientProgramId;
+	// Its server still holds the attached client's terminal-type reply and TERM.
+	for (const clientProgram of resolveTmuxClientTerminalNames(env)) {
+		const clientProgramId = fromProgram(clientProgram);
+		if (clientProgramId) return clientProgramId;
+	}
 
 	if (TERM?.toLowerCase().includes("ghostty")) return "ghostty";
 	if (TERM && caseEq(TERM, "monstar")) return "monstar";
@@ -917,8 +967,7 @@ export function encodeKittyPlacement(options: {
 /**
  * Exact shape of the direct-placement line {@link Image} emits as its block's
  * last row: optional `ESC 7` + `CUU(rows-1)` prefix, the {@link encodeKittyPlacement}
- * APC, optional `ESC 8` suffix. tmux-passthrough-wrapped lines deliberately do
- * not match (passthrough placements stay untouched).
+ * APC, optional `ESC 8` suffix. The parser unwraps tmux passthrough first.
  */
 const KITTY_DIRECT_PLACEMENT_LINE =
 	/^(?:\x1b7(?:\x1b\[(\d+)A)?)?\x1b_Ga=p,q=2,C=1,i=(\d+)(?:,p=(\d+))?(?:,c=(\d+))?(?:,r=(\d+))?\x1b\\(?:\x1b8)?$/;
@@ -933,10 +982,15 @@ export interface ParsedKittyPlacementLine {
 /**
  * Parse a frame line that consists solely of a Kitty direct placement (the
  * last line of an {@link Image} block). Returns null for anything else —
- * placeholder grids, tmux-wrapped placements, sixel/iTerm2 payloads — so
+ * placeholder grids, sixel/iTerm2 payloads — so
  * callers fall back to writing the line verbatim.
  */
 export function parseKittyDirectPlacementLine(line: string): ParsedKittyPlacementLine | null {
+	if (line.includes("\x1bPtmux;")) {
+		line = line.replace(/\x1bPtmux;((?:[^\x1b]|\x1b\x1b)*)\x1b\\/g, (_match, payload: string) =>
+			payload.replaceAll("\x1b\x1b", "\x1b"),
+		);
+	}
 	const m = KITTY_DIRECT_PLACEMENT_LINE.exec(line);
 	if (!m) return null;
 	const columns = m[4] !== undefined ? Number(m[4]) : 0;
@@ -948,6 +1002,21 @@ export function parseKittyDirectPlacementLine(line: string): ParsedKittyPlacemen
 		columns,
 		rows,
 	};
+}
+
+/** `ESC 7` + `CUU(n)` lead-in of an {@link Image} direct-placement line. */
+const DIRECT_PLACEMENT_LIFT = /^\x1b7\x1b\[(\d+)A/;
+
+/**
+ * Rows above its own line that an {@link Image} direct-placement line paints
+ * over: the `CUU(rows-1)` of its lead-in, or 0 for any other line. The renderer
+ * erases those rows before a SIXEL/iTerm2 block is written again, because
+ * those protocols have no delete command and the block's reserved rows are
+ * byte-identical between frames, so the diff never rewrites them.
+ */
+export function directPlacementLift(line: string): number {
+	const m = DIRECT_PLACEMENT_LIFT.exec(line);
+	return m ? Number(m[1]) : 0;
 }
 
 /**
@@ -981,9 +1050,7 @@ export function encodeKittyPlacementLine(options: {
 		const srcY = Math.floor((options.imageHeightPx * hiddenRows) / options.rows);
 		params.push(`y=${srcY}`, `h=${Math.max(1, options.imageHeightPx - srcY)}`);
 	}
-	// No tmux passthrough: inside tmux the component's own line arrives
-	// wrapped, never parses, and never reaches this rewrite.
-	const apc = `\x1b_G${params.join(",")}\x1b\\`;
+	const apc = wrapTmuxPassthroughIfNeeded(`\x1b_G${params.join(",")}\x1b\\`);
 	const cuu = visibleRows - 1;
 	return cuu > 0 ? `\x1b7\x1b[${cuu}A${apc}\x1b8` : apc;
 }
@@ -1010,8 +1077,8 @@ export function encodeKittyDeleteAllImages(): string {
 /**
  * Delete a single placement of an image (`d=i`, lowercase): removes its cells
  * and registry entry but keeps the transmitted data, so a later `a=p` under a
- * fresh placement id needs no retransmit. Used to clear stale placement-epoch
- * entries after a destructive history clear.
+ * fresh placement id needs no retransmit. The frame writer uses this before
+ * replacing a live image without deleting its archived copies.
  */
 export function encodeKittyDeletePlacement(imageId: number, placementId: number): string {
 	return wrapTmuxPassthroughIfNeeded(`\x1b_Ga=d,d=i,i=${imageId},p=${placementId},q=2\x1b\\`);
@@ -1040,6 +1107,19 @@ export function encodeITerm2(
 	}
 
 	return `\x1b]1337;File=${params.join(";")}:${base64Data}\x07`;
+}
+
+/**
+ * The encoded image `encodeITerm2` wrote into `line`, without the size
+ * parameters a rewrap changes; undefined for a line without one.
+ */
+export function iterm2ImagePayload(line: string): string | undefined {
+	const start = line.indexOf(ImageProtocol.Iterm2);
+	if (start === -1) return undefined;
+	const colon = line.indexOf(":", start + ImageProtocol.Iterm2.length);
+	if (colon === -1) return undefined;
+	const end = line.indexOf("\x07", colon + 1);
+	return line.slice(colon + 1, end === -1 ? undefined : end);
 }
 
 export function calculateImageRows(
@@ -1229,9 +1309,16 @@ export function getImageDimensions(base64Data: string, mimeType: string): ImageD
  * thread; `null` when the encode fails. For output that cannot wait for an
  * off-thread encode.
  */
-export function encodeSixelNow(base64Data: string, widthPx: number, heightPx: number): string | null {
+export function encodeSixelNow(
+	base64Data: string,
+	widthPx: number,
+	heightPx: number,
+	backgroundRgb = getTerminalBackgroundColor(),
+): string | null {
 	try {
-		return encodeSixel(new Uint8Array(Buffer.from(base64Data, "base64")), widthPx, heightPx);
+		return ensureSixelRasterWidth(
+			encodeSixel(new Uint8Array(Buffer.from(base64Data, "base64")), widthPx, heightPx, backgroundRgb),
+		);
 	} catch {
 		return null;
 	}
@@ -1290,33 +1377,26 @@ export function renderImage(
 	}
 
 	if (TERMINAL.imageProtocol === ImageProtocol.Sixel) {
-		// SIXEL encodes in 6-pixel vertical bands. A height that is not a
-		// multiple of 6 is padded with transparent rows, but the terminal
-		// still allocates cell rows for the padded height. When the padded
-		// height crosses a cell boundary the terminal uses one more row
-		// than fit.rows, so the next line of content overwrites the bottom
-		// of the image — a visible slice stripped from the image. Round the
-		// encode height DOWN to the largest multiple of 6 that fits within
-		// the requested row budget, so the band boundary aligns without
-		// padding and the reserved row count never exceeds fit.rows. Scale
-		// the width by the same ratio so resize_exact preserves the aspect
-		// ratio instead of squashing the image vertically.
-		const rawHeightPx = Math.max(1, fit.rows * cellDims.heightPx);
-		const targetHeightPx = Math.max(6, Math.floor(rawHeightPx / 6) * 6);
-		const heightScale = targetHeightPx / rawHeightPx;
-		const targetWidthPx = Math.max(1, Math.round(fit.columns * cellDims.widthPx * heightScale));
-		const rows = Math.max(1, Math.ceil(targetHeightPx / cellDims.heightPx));
-		const sequence = options.sixel
-			? options.sixel(targetWidthPx, targetHeightPx)
-			: encodeSixelNow(base64Data, targetWidthPx, targetHeightPx);
+		// Encode the cell box itself, so a raster drawn at the cell size
+		// (SvgFigure) is placed 1:1 instead of resampled. The encoder drops a
+		// partial last 6px band rather than letting the terminal pad it into
+		// the next row; only a box under one band (sub-6px cells) still takes
+		// the rows of a whole one.
+		const heightPx = fit.rows * cellDims.heightPx;
+		const widthPx = fit.columns * cellDims.widthPx;
+		const rows = heightPx < 6 ? Math.ceil(6 / cellDims.heightPx) : fit.rows;
+		const sequence = options.sixel ? options.sixel(widthPx, heightPx) : encodeSixelNow(base64Data, widthPx, heightPx);
 		if (sequence === null) return null;
 		// Undefined while the provider's encode is pending: the rows stay reserved.
 		return { sequence, rows };
 	}
 	if (TERMINAL.imageProtocol === ImageProtocol.Iterm2) {
+		// The height is the rows reserved for the image, not `auto`: iTerm2
+		// resolves `auto` only for a session on screen, so an image written to a
+		// background tab is dropped, and its rows stay blank in scrollback too.
 		const sequence = encodeITerm2(base64Data, {
 			width: fit.columns,
-			height: "auto",
+			height: fit.rows,
 			preserveAspectRatio: options.preserveAspectRatio ?? true,
 		});
 		return { sequence, rows: fit.rows };

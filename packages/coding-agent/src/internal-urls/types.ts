@@ -139,6 +139,8 @@ export interface LocateOptions {
 	directory?: boolean;
 	/** Return the path even when the entry does not exist yet (write/bash targets). Never creates anything. */
 	create?: boolean;
+	/** The caller needs a local file (`%load`, plan-mode write checks): report a miss now instead of deferring it to a remote resolve. */
+	localOnly?: boolean;
 }
 
 /**
@@ -196,6 +198,8 @@ export interface InternalResource {
 	 * resources. Mutable resources (e.g. local://) behave like editable files.
 	 */
 	immutable?: boolean;
+	/** Overrides {@link SchemeSpec.unbounded} for this resource (an MCP resource read through `skill://`). */
+	unbounded?: boolean;
 	/**
 	 * True when the resource is a directory listing rather than file content.
 	 * `search` refuses to grep such a resource when it has no `sourcePath` — a
@@ -268,6 +272,12 @@ export interface ResolveContext {
 	 * as a second exact identity alongside {@link sessionFile}.
 	 */
 	sessionId?: string;
+	/**
+	 * Source artifacts dir of a seance caller (editor completion binding).
+	 * History completions may use this scalar without constructing a tool
+	 * session; tool resolution reads {@link session}.seanceSourceArtifactsDir.
+	 */
+	seanceSourceArtifactsDir?: string;
 	/** Registry that owns the calling session; defaults to the process-wide registry. */
 	agentRegistry?: AgentRegistry;
 	/** Settings of the calling session (used by `issue://`/`pr://` for cache TTLs). */

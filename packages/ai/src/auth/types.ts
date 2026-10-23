@@ -62,6 +62,8 @@ export interface AuthAccountPolicy {
 	readonly priority?: number;
 	/** Protected remaining quota percentage for this account. */
 	readonly reservePct?: number;
+	/** Remaining quota percentage, above the reserve, at which this account takes back lower-priority warm pins. */
+	readonly reclaimAbovePct?: number;
 }
 
 /** Read-only set of per-account routing policies. */
@@ -707,6 +709,16 @@ export interface AuthSourceOptions {
 	env?: "dedicated" | "aliases" | "none";
 }
 
+/** Options for {@link KeysApi.peek}. */
+export interface AuthPeekOptions {
+	/**
+	 * Fall back to an expired OAuth access token when no stored account holds an
+	 * unexpired one. Only for reads that never send the token, e.g. keying an
+	 * offline model-cache lookup on the account it names.
+	 */
+	includeExpired?: boolean;
+}
+
 /** Where a provider's auth comes from ({@link CredentialOrigin}) plus whether any leg holds a concrete key. */
 export interface AuthSource extends CredentialOrigin {
 	/** False when the only auth is an ambient AUTHENTICATED_SENTINEL source (AWS profile, ADC). */
@@ -939,9 +951,10 @@ export interface KeysApi {
 	 * Peek at API key for a provider without refreshing OAuth tokens.
 	 * Used for model discovery where we only need to know if credentials exist
 	 * and get a best-effort token. For GitHub Copilot we preserve enterprise
-	 * routing metadata so discovery can hit the correct host.
+	 * routing metadata so discovery can hit the correct host. Repeated peeks
+	 * return the same stored credential; they never rotate accounts.
 	 */
-	peek(provider: string): Promise<string | undefined>;
+	peek(provider: string, options?: AuthPeekOptions): Promise<string | undefined>;
 	/** Resolve the first active auth source by precedence without refreshing credentials. */
 	source(provider: string, options?: AuthSourceOptions): AuthSource | undefined;
 	/**
@@ -1188,6 +1201,12 @@ export interface SessionsApi {
 	 * so a stale owner never lifts the restriction a newer owner relies on.
 	 */
 	unrestrict(provider: string, sessionId: string, lease: SessionRestrictionLease): void;
+	/**
+	 * Whether stored credential `credentialId` may serve `sessionId`: always for
+	 * an unrestricted session, otherwise only an OAuth account its
+	 * {@link restrict} list names.
+	 */
+	permits(provider: string, sessionId: string, credentialId: number): boolean;
 	/**
 	 * Release a session's sticky credential so its next {@link getApiKey} call
 	 * re-runs native pool ranking. This never blocks or penalizes the released

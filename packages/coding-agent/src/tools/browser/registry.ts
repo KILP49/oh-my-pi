@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { isCompiledBinary, logger, untilAborted, withTimeout, workerHostEntry } from "@oh-my-pi/pi-utils";
+import { getLogsDir, isCompiledBinary, logger, untilAborted, withTimeout, workerHostEntry } from "@oh-my-pi/pi-utils";
 import type { Subprocess } from "bun";
 import type { Browser, CDPSession } from "puppeteer-core";
 import { ToolAbortError } from "../tool-errors";
@@ -276,8 +276,13 @@ async function openBrowserHandle(kind: BrowserKind, opts: AcquireBrowserOptions)
 		// already outlived the window an installed extension needs to connect.
 		let outcome = await waitForRelayExtension(cdpUrl, opts.signal);
 		// A broker-owned relay outlives omp upgrades; replace an incompatible one
-		// with this version's once. A manually started relay is left to its owner.
+		// with this version's once, and a compatible older one only while no CDP
+		// client uses it. A manually started relay is left to its owner.
 		if (outcome === "outdated-relay" && autoStart && (await restartRelayDaemon({ cdpUrl, signal: opts.signal }))) {
+			outcome = await waitForRelayExtension(cdpUrl, opts.signal);
+		} else if (outcome === "idle-older-relay" && autoStart) {
+			// Probe again even when it was kept: another omp may have replaced it since.
+			await restartRelayDaemon({ cdpUrl, signal: opts.signal, idleOnly: true });
 			outcome = await waitForRelayExtension(cdpUrl, opts.signal);
 		}
 		if (outcome === "unreachable") {
@@ -494,7 +499,7 @@ async function openSharedHeadlessHandle(
 		});
 		if (!shared) {
 			throw new ToolError(
-				"Shared browser daemon unavailable (broker start or Chromium launch failed); check `omp ps` for omp.browser.* daemons and ~/.omp/logs for details",
+				`Shared browser daemon unavailable (broker start or Chromium launch failed); check \`omp ps\` for omp.browser.* daemons and ${getLogsDir()} for details`,
 			);
 		}
 		const puppeteer = await loadPuppeteer();

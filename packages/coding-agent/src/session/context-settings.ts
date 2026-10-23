@@ -44,14 +44,20 @@ function contextFileNameError(entry: unknown): string | undefined {
 	return undefined;
 }
 
-/**
- * Extra instruction filenames discovered in addition to AGENTS.md / CLAUDE.md / GEMINI.md.
- * Config-file only: the names are open-ended, so there is no settings-panel vocabulary.
- */
+/** Extra instruction filenames discovered in addition to AGENTS.md / CLAUDE.md / GEMINI.md. */
 export const cfgContextFilesExtra = register({
 	id: "contextFiles.extra",
 	type: "array",
 	default: EMPTY_STRING_ARRAY,
+	ui: {
+		tab: "context",
+		group: "General",
+		label: "Extra Context Files",
+		editor: "json",
+		description:
+			'Extra instruction filenames loaded beside AGENTS.md. Use a JSON list of names, not paths, e.g. ["AGENTS.local.md"]; [] disables extras. Start a new session to load them.',
+		condition: "contextFilesExtraNotProject",
+	},
 	validate: raw => {
 		if (raw === undefined) return;
 		if (!Array.isArray(raw)) throw new Error("contextFiles.extra must be a list of file names");
@@ -75,7 +81,8 @@ export const cfgContextPromotionEnabled = register({
 		tab: "context",
 		group: "General",
 		label: "Auto-Promote Context",
-		description: "Promote to a larger-context model on context overflow instead of compacting",
+		description:
+			"Promote to the model's contextPromotionTarget on context overflow instead of compacting. Retry fallback switches are controlled by Retry Model Fallback",
 	},
 });
 
@@ -336,7 +343,8 @@ export const cfgCompactionIdleTimeoutSeconds = register({
 		tab: "context",
 		group: "Compaction",
 		label: "Idle Compaction Delay",
-		description: "Seconds to wait while idle before compacting",
+		description:
+			"Seconds to wait while idle before compacting; with a 1-hour prompt cache, compaction instead runs just before the cache expires",
 		options: [
 			{ value: "60", label: "1 minute" },
 			{ value: "120", label: "2 minutes" },
@@ -440,7 +448,7 @@ export const cfgSnapcompactToolResults = register({
 		group: "Experimental",
 		label: "Snapcompact Tool Results",
 		description:
-			"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.",
+			"Experimental: render large tool results, the newest one included, as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated search and command output; read results stay text unless the model is known to edit exactly from images.",
 	},
 });
 

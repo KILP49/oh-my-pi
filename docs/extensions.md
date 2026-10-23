@@ -225,6 +225,57 @@ RPC rejects secret prompts instead of forwarding them as ordinary input. SDK
 hosts implementing `onPrompt` must honor `secret` or reject the prompt. Masking
 does not provide encryption, memory erasure, or general log redaction.
 
+### Command-backed providers
+
+`registerProvider` also supports providers whose transport is implemented by the
+extension itself. The `api` value is an extension-owned string (built-in API
+names are reserved), and `streamSimple` returns the canonical
+`AssistantMessageEventStream`; it does not need to be an HTTP endpoint:
+
+```ts
+import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai";
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerProvider("local-command", {
+    // Required model metadata; the custom stream does not use this URL.
+    baseUrl: "https://command-provider.invalid/",
+    apiKey: "unused-by-extension",
+    api: "local-command-api",
+    streamSimple(model, context, options) {
+      const stream = new AssistantMessageEventStream();
+      // Spawn the command, translate its output, and push canonical OMP events.
+      // The implementation owns process cleanup, cancellation, and errors; the
+      // helper needs `context` for the conversation and `options` for `signal`,
+      // `cwd`, and the stable `sessionId`.
+      void runCommandAndPushEvents(stream, model, context, options);
+      return stream;
+    },
+    models: [{
+      id: "local-command-model",
+      name: "Local command",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128000,
+      maxTokens: 16000,
+    }],
+  });
+}
+```
+
+This pattern is useful for a local CLI, stdio service, or JSONL process. It is
+also how a provider rides a plan the vendor only exposes through its CLI: the
+child authenticates with its own subscription credentials, where the same model
+reached through an API key bills per token even for an account that already pays
+for a plan. A command-backed provider should keep its own tool loop inside the
+child process and emit only the resulting assistant events if those tools must
+remain owned by the child. A complete subprocess adapter should also remove
+credentials it must not inherit, honor `options.signal`, use `options.cwd`, map
+one stable session id to one child conversation, and convert non-zero exits into
+a stream error. `models.yml` remains HTTP/configuration-only; extensions are the
+supported escape hatch for non-HTTP transports.
+
 In interactive mode, `input` handlers run before the built-in first-message auto-title check. Extensions that call `await pi.setSessionName(...)` from `input` can set the persisted session name and prevent the default auto-generated title from running for that session.
 
 Also exposed:
@@ -304,11 +355,16 @@ Handlers and tool `execute` receive `ctx` with:
 - `compact(instructionsOrOptions?)`: accepts summary focus text or `CompactOptions`, including one-off `mode: "soft" | "remote" | "snapcompact"`, `onComplete`, `onError`, and `suppressContinuation`
 - `isIdle()`, `hasPendingMessages()`, `abort()`
 - `shutdown()`
+- `resolvePlanReview(reviewId, choice, input?)`: answer the open interactive plan review; returns `false` when the review or choice is unavailable, `refine` requires non-empty `input.feedback`, and on approvals (`execute`, `compact`, `keep`) `input.role` may name a tier from the event's `tiers` to pick the execution model (an unknown role, or a `role` on any other choice, returns `false`)
+- `getPendingPlanReview()`: the open interactive plan review still awaiting an answer, in the `plan_review_requested` shape, or `undefined`; use it to answer a review that opened before the extension loaded or reconnected
+- `openPlanReview()`: open the interactive plan review on the newest plan file, like `/plan-review`; resolves `true` once a review awaits an answer, without waiting for a choice. An already-open review is kept rather than replaced. Unlike `/plan-review` it never aborts work: it resolves `false`, silently, while the agent is streaming or compacting, when plan mode is inactive, or when no non-empty plan file exists
 - `getSystemPrompt()`
 - `isProjectTrusted()` — always `true`; OMP does not ask for per-directory trust before loading project inputs
 - `agent` — the agent this session runs: `{ kind: "main" | "sub", id, name, depth, parentId? }`. Factories are rebound to every subagent session (task tool, eval `agent()`, `/tan` clones), so a handler can check `ctx.agent.kind === "sub"` or the lowercased agent definition `name` (for example `"explore"`) to act only in subagents. Use `kind`, not `depth`: `depth` counts `task` nesting only, so `/tan` clones are subagents at depth 0 and report `name: "sub"`. An advisor's own tool calls reach the session's `tool_call`/`tool_result` handlers with `{ kind: "sub", id: "advisor", name: "advisor", depth: 0, parentId }`, so `kind === "main"` also excludes advisor activity
 - `runEphemeralTurn(...)` (optional; see below)
 - `memory` (optional structured memory runtime — status/search/save across the configured backend)
+- `annotations`: `/annotate` as an API, for boards and remote clients. `submit({ source, notes, deliver?, review?, focus? })` builds the feedback `/annotate` would and delivers it without any UI; `open({ source, deliver?, focus? })` mounts the annotation overlay on the source and resolves with the operator's notes (`undefined` when dismissed; `mode === "tui"` only). Text sources are `{ kind: "text", text, label? }`, `{ kind: "file", path }` (resolved against the live session cwd), or `{ kind: "last" }`; diff sources are `{ kind: "diff", diff, label? }`, `{ kind: "uncommitted" }`, or `{ kind: "pr", ref }` (`ref` is a GitHub PR or GitLab MR URL, `pr://owner/repo/N`, or `mr://<host>/<group>/<project>/N/diff`). `review`/`focus` apply to diff sources only (a type error on text sources). Text notes are `{ note, line?, quote? }` (1-based; whole-source when omitted, and the quoted line is filled in); diff notes are `{ path, note, line?, side?, occurrence?, rawLine? }` (`side` defaults to `"new"`; `rawLine` is the diff row including its `+`/`-`/space prefix). Notes that do not match their source reject rather than being dropped. `text` and `diff` sources are frozen snapshots of what you pass; `file`, `last`, `uncommitted`, and `pr` are re-read at call time and line numbers are matched against the current content, so pass `quote`/`rawLine` to reject a note (naming it) when that content drifted. `deliver` defaults to `"auto"`: pasteable notes go into the composer when the interactive TUI editor is available and are sent otherwise; an LLM review request (`review: true` on a diff) is always sent. Sending uses `pi.sendUserMessage` and queues as a follow-up while the agent is streaming. `"paste"`/`"send"` force a channel and `"none"` only returns `text`. The result is discriminated by `kind`: `"text"` carries `TextReviewAnnotation[]` and, after `open`, `editedText` when the operator replaced the source in the external editor (the feedback then refers to that text); `"diff"` carries `CodeReviewAnnotation[]` and `review` (whether `text` is an LLM review request). Both carry the rendered `text` and the `delivered` channel.
+  Explicit paste requires `ctx.ui.supportsEditor === true`: the TUI and non-headless RPC expose composers; ACP and no-op UI contexts do not. Supplied diffs used for LLM review reject above 50,000 characters or 20 reviewable files before delivery, and `open` rejects such a patch before mounting the overlay; split larger patches into smaller requests. Notes-only submissions do not have this review-prompt bound.
 - `setInterval(fn, ms, ...args)` / `setTimeout(fn, ms, ...args)` / `clearTimer(timer)` — managed timers (see below)
 
 ### Ephemeral side turns (`ctx.runEphemeralTurn`)
@@ -405,6 +461,16 @@ Canonical event unions and payload types are in `types.ts`.
 - `session_before_tree` / `session_tree`
 - `session_shutdown`
 
+In the interactive TUI, an extension whose factory registers no providers,
+shortcuts, composer shapes, or file fallbacks is loaded after the composer
+accepts input, once a previous launch has recorded that about its current
+source. Its `session_start` still runs (it is delivered when the extension
+binds), and the first submitted message and every model turn wait until it is
+loaded, so its tools, commands, and `input`/`before_agent_start` hooks apply from
+the first request. Events emitted before it binds are not replayed. Resumed
+sessions, `--tools`, and launches with flags omp does not recognize load every
+extension before the session starts.
+
 `session.compacting` receives `{ sessionId, messages }` and can return
 `{ context?: string[]; prompt?: string; preserveData?: Record<string, unknown> }`
 to customize summary context, the summarizer prompt, and stored compaction data.
@@ -495,6 +561,13 @@ and `/new`. Commands retain their explicit prefill and session-transition action
 - `tool_approval_requested` / `tool_approval_resolved` (observability; emitted by `wrapper.ts` only when a tool requires approval and an approval handler is registered)
 
 `tool_result` is middleware-style: handlers run in extension order and each sees prior modifications. Distinct non-blank `additionalContext` from every handler is preserved in registration order (repeats, compared ignoring surrounding whitespace, are dropped) and delivered before that call's `tool_call` context.
+
+### Plan review lifecycle
+
+- `plan_review_requested` reports an interactive plan review with its `reviewId`, session, title, plan path and content, plus the choices in display order. Choice ids are stable (`execute`, `compact`, `keep`, `refine`, `save`); labels may change, and `keep` carries the current token count. An extension can answer it with `ctx.resolvePlanReview(...)` while the terminal picker stays live; the first answer wins. `save` uses the default file name without opening the path prompt.
+- An approval answered by an extension runs on the tier named by `input.role`, or the one currently selected in the overlay's model slider when `role` is omitted; `plan_review_requested` lists the selectable `tiers` (`role`, `provider`, `model`, and `thinkingLevel` when the role pins one; absent when fewer than two resolve). The approval executes the plan as it is at pick time: in-overlay edits if any, otherwise the plan file re-read from disk. That can differ from the reported `planContent`; an extension may write the plan file before answering to execute its own revision.
+- Tier order follows the configured role cycle, not the selected tier. The slider initially selects `default` when available; a remote `input.role` updates the displayed tier and commits the answer, preventing later terminal input from changing it.
+- `plan_review_resolved` reports how that review closed, with the selected choice id (or `undefined` when dismissed or cancelled by a session switch, a replacement review, or shutdown) and `by: "local" | "extension"`. It fires when the overlay actually closes, after every `plan_review_requested` handler has returned, so `plan_review_requested` handlers should hand off long work (a remote round-trip, a `ctx.ui` dialog) instead of awaiting it.
 
 ### Subagent lifecycle
 
@@ -810,7 +883,7 @@ before and performs no extra syscalls.
 Supported:
 
 - dialogs: `select`, `confirm`, `input`, `editor`, optional `askDialog`
-- input editing: `setEditorText`, `getEditorText`, `pasteToEditor`, `editor`
+- input editing: `setEditorText`, `getEditorText`, `pasteToEditor`, `editor`; `supportsEditor` indicates whether paste updates a local or remote composer (absent means unsupported)
 - autocomplete stacking: `addAutocompleteProvider(factory)` wraps the built-in editor provider (factories apply in registration order and re-apply on every slash-command refresh)
 - terminal title and working message (`setTitle`, `setWorkingMessage`)
 - notifications/status/editor text/terminal input/custom overlays
@@ -824,6 +897,10 @@ Current no-op methods in this controller:
 
 `ctx.ui.setEditorComponent(factory)` is wired to the live editor; the factory
 must return a `CustomEditor` subclass, not a plain `Editor`/`EditorComponent`.
+`ctx.ui.getEditorComponent()` returns the factory currently installed (or
+`undefined` for the built-in editor), so an extension can wrap another
+extension's editor instead of replacing it; inside a factory it still returns
+the previous one.
 `setWidget` renders widget components above or below the editor via
 `setHookWidget(...)` (`placement: "aboveEditor" | "belowEditor"`; string arrays show
 up to 10 content lines plus a truncation notice). Pass `undefined` to remove a
@@ -925,12 +1002,18 @@ direct argv execution. Zellij options that need a newer CLI than the one install
 with an error naming the required version; the dispatcher checks `zellij --version`
 once per process.
 
-Herdr `pane run`, CMUX `--command`, and Orca `terminal split`/`terminal create`
+Herdr `pane run` types text into the destination's interactive shell, so the
+adapter writes the POSIX-quoted argv to a private, self-deleting `/bin/sh` script
+under the temp directory and types only its absolute path. Any interactive shell
+that runs a bare path (POSIX shells, fish, Nushell) launches the exact argv, so
+Herdr requests take no `shellGrammar`. Herdr launches are rejected on Windows.
+
+CMUX `--command` and Orca `terminal split`/`terminal create`
 submit shell command text to the destination's interactive shell rather than
 launching argv directly. Their requests therefore require `shellGrammar: "posix"`.
 Set it only after confirming that the destination shell accepts POSIX syntax; it
 is not inferred from the local OS or `$SHELL`, and the configured shell is not
-guessed. Without that assertion, do not request a Herdr, CMUX, or Orca launch.
+guessed. Without that assertion, do not request a CMUX or Orca launch.
 Once asserted, argv words are quoted with the shared POSIX shell-quoting helpers.
 Orca split/create have no `--cwd` flag, so the adapter prepends
 `cd <quoted-cwd> &&` before the quoted command in `--command`; CMUX split also
@@ -983,7 +1066,7 @@ Unsupported/no-op in RPC implementation:
 
 - `onTerminalInput`
 - `custom`; optional `askDialog` is absent
-- `getEditorText` returns `""`
+- `getEditorText` returns `""`; `getEditorComponent` returns `undefined`
 - `setFooter`, `setHeader`, `setEditorComponent`, `addAutocompleteProvider`
 - `setWorkingMessage`
 - theme switching/loading (`setTheme` returns failure)
