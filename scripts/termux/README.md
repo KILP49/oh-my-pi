@@ -88,10 +88,18 @@ Then stage and install it:
 
 ## Termux TUI flicker
 
-Termux 0.118.x redraws the whole viewport when the soft keyboard changes the terminal
-height, which shows up as a flash. Some terminals also mishandle DEC 2026 synchronized
-output. omp 18.12.6 probes for DEC 2026 and skips the markers when the terminal does
-not answer, so the env var below may be a no-op on Termux; try it first anyway:
+The reveal animation repaints on every frame while text streams, which Termux cannot
+always keep up with; the result is jumpy output that looks like flicker. Turn it off
+first:
+
+```sh
+omp config set display.smoothStreaming false
+```
+
+Restart omp afterwards. Termux also redraws the whole viewport when the soft keyboard
+changes the terminal height. Some terminals mishandle DEC 2026 synchronized output,
+but omp 18.12.6 probes for it and skips the markers when the terminal does not answer,
+so the env var may be a no-op; try it if the above is not enough:
 
 ```sh
 PI_NO_SYNC_OUTPUT=1 omp
