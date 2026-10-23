@@ -94,6 +94,14 @@ missing or broken, `3` means a different version is installed.
 linked to bun's cache and the CLI resolves an **unpatched**
 `@oh-my-pi/pi-natives` copy from `~/.bun/install/cache/...`.
 
+### Termux rendering
+
+- `bash scripts/termux/tune-termux.sh` — ASCII symbols/status line, chunked streaming,
+  and the browser tool turned off (no Chromium in Termux).
+- If streaming still feels janky, coalesce repaints (patches the installed CLI bundle,
+  keeps a backup): `bash scripts/termux/patch-render.sh 40`; undo with
+  `bash scripts/termux/patch-render.sh restore`.
+
 ## How the port works
 
 | Piece | What it does |
