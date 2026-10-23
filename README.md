@@ -131,7 +131,7 @@ stock `pi-natives` package and native loading breaks again.
 | `.node` download fails | GitHub releases blocked | use a proxy; the updater already retries |
 | `raw.githubusercontent.com` unreachable | network or proxy | use the `api.github.com` form above |
 | stale files after a failed update | interrupted install | rerun the updater; it removes the old install |
-| TUI flickers or tears | DEC 2026 synchronized output is mishandled by Termux 0.118.x | launch with `PI_NO_SYNC_OUTPUT=1 omp` |
+| TUI flickers or tears | Termux redraws the whole viewport when the soft keyboard changes height; some terminals also mishandle DEC 2026 | try `PI_NO_SYNC_OUTPUT=1 omp`; hiding the soft keyboard avoids the height-change redraw |
 
 ## Build it yourself (fallback, 30–45 min)
 
