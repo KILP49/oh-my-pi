@@ -4,6 +4,18 @@ Upstream npm packages ship no `android-arm64` native addon, so `omp` aborts on T
 with `Unsupported platform: android-arm64`. This branch carries the source port plus
 the tooling that builds, ships and installs it.
 
+## Readiness check
+
+`scripts/termux/check-omp.sh [version]` exits 0 only when omp is actually runnable
+(CLI prints a version, the loader is patched, and the addon loads):
+
+- `0` — ready (prints the version)
+- `2` — missing/broken (bun, CLI, addon, loader patch, or addon load)
+- `3` — a different version is installed
+
+`update-omp.sh` runs the same check first: if the requested version is healthy it
+exits immediately without apt, npm or downloads. `OMP_FORCE=1` forces a reinstall.
+
 ## Patch set (vs upstream)
 
 - `packages/natives/native/loader-state.js` — registers `android-arm64` in `SUPPORTED_PLATFORMS`
@@ -25,8 +37,8 @@ curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.12.6/scr
 #   ... | bash -s -- 18.12.6
 ```
 
-Requires `bun`, `curl` and `python3` in Termux (`pkg install bun curl python`). No root,
-no toolchain.
+Requires `bun` and `curl` in Termux (`pkg install bun curl`). python is no longer
+needed. No root, no toolchain.
 
 What `update-omp.sh` does:
 
@@ -73,6 +85,18 @@ Then stage and install it:
   a new omp release needs a matching addon rebuild.
 - Never run the upstream installer or `omp update` on Termux: both restore the stock
   `pi-natives` package and native loading breaks.
+
+## Termux TUI flicker
+
+The TUI wraps every render in DEC 2026 synchronized output. Termux 0.118.x does not
+handle it reliably, so the screen can flicker/tear while output streams:
+
+```sh
+PI_NO_SYNC_OUTPUT=1 omp
+```
+
+That env var disables the synchronized-output wrapper (see upstream #1765).
+Soft-keyboard height changes also force a full redraw on Termux.
 
 ## Build status
 
