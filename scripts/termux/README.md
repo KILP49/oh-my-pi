@@ -60,8 +60,9 @@ linked to bun's cache and the CLI ends up resolving an *unpatched*
 bash scripts/termux/tune-termux.sh
 ```
 
-It disables smooth streaming, switches symbols/status line to ASCII, and turns the
-browser tool off. If output still feels janky while a model streams quickly, coalesce
+It disables smooth streaming, switches symbols/status line to ASCII, turns the
+thinking-block shimmer off (it repaints every 70 ms while the model thinks), and
+disables the browser tool. If output still feels janky while a model streams quickly, coalesce
 repaints (patches the installed `dist/cli.js`, keeps a backup):
 
 ```sh
