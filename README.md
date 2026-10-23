@@ -43,10 +43,10 @@ per-version release. The phone downloads a prebuilt addon; it never compiles Rus
 
 - Android device with `arm64-v8a` (`uname -m` prints `aarch64`), Android 7.0+ (API 24)
 - [Termux](https://github.com/termux/termux-app#installation) from F-Droid or GitHub — the Play Store build is outdated
-- `bun`, `curl` and `python3`:
+- `bun` and `curl`:
 
 ```sh
-pkg install bun curl python
+pkg install bun curl
 ```
 
 No root required. Everything lands under `$PREFIX`
@@ -74,6 +74,13 @@ curl -fsSL https://raw.githubusercontent.com/KILP49/oh-my-pi/android-18.12.6/scr
 
 Without an argument the updater picks the newest `android-addon-*` release
 (currently `18.12.6`), installs the matching CLI, and verifies `omp --version`.
+The updater is idempotent: if that version is already installed and the addon
+actually loads, it exits without downloading or installing anything
+(`OMP_FORCE=1` forces a reinstall).
+
+`scripts/termux/check-omp.sh [version]` performs the same check standalone:
+exit `0` means omp runs (CLI + patched loader + addon), `2` means something is
+missing or broken, `3` means a different version is installed.
 
 ### What the installer does
 
@@ -124,6 +131,7 @@ stock `pi-natives` package and native loading breaks again.
 | `.node` download fails | GitHub releases blocked | use a proxy; the updater already retries |
 | `raw.githubusercontent.com` unreachable | network or proxy | use the `api.github.com` form above |
 | stale files after a failed update | interrupted install | rerun the updater; it removes the old install |
+| TUI flickers or tears | DEC 2026 synchronized output is mishandled by Termux 0.118.x | launch with `PI_NO_SYNC_OUTPUT=1 omp` |
 
 ## Build it yourself (fallback, 30–45 min)
 
