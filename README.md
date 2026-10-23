@@ -142,10 +142,10 @@ omp --version
 | Branch | Addon release |
 |---|---|
 | `android-18.6.1` | `android-addon-18.6.1` |
-| `android-18.6.3` (default) | `android-addon-18.6.3` |
+| `android-18.6.3` | `android-addon-18.6.3` |
 | `android-18.8.3` | `android-addon-18.8.3` |
 | `android-18.8.9` | `android-addon-18.8.9` |
-| `android-18.12.6` | `android-addon-18.12.6` |
+| `android-18.12.6` (default) | `android-addon-18.12.6` |
 
 CI build for 18.12.6 (2026-10-23): `PI_NATIVES_VERSION_STAMP:18.12.6`,
 98,806,304 bytes after `llvm-strip`. Device verification for 18.12.6 is pending;
